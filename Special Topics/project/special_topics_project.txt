@@ -1,0 +1,257 @@
+"""
+
+# Hate Speech Detection
+CS6301 Special Topics
+
+Group Members:
+
+Anurag Wasankar
+
+Astha Thakur
+
+Moxaben Zalawadia
+
+## Environment Setup
+
+The libraries required for the project to run are imported and initialized
+"""
+
+import requests
+import pandas
+import re
+import nltk
+import matplotlib.pyplot as plt
+import numpy
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import classification_report, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.svm import SVC
+from keras.preprocessing.text import Tokenizer
+from keras.utils import pad_sequences
+from keras import regularizers, layers
+from keras.models import Sequential, load_model
+from keras.optimizers import RMSprop,Adam
+from keras import backend as K
+from keras.callbacks import ModelCheckpoint
+import tensorflow as tf
+nltk.download('punkt')
+nltk.download('stopwords')
+
+"""## Retrieving the dataset
+
+Since the dataset is hosted on Google Drive, it is fetched and written into a csv file.
+"""
+
+gDrive_link = 'https://drive.google.com/uc?export=download&id=1F3oU61kC2ZqQ9HJLKAmoblehs3ENgUl8'
+response = requests.get(gDrive_link, headers = {'Accept': 'application/text'})
+with open('twitter_text_data.csv', "w") as twitter_text_data:
+  twitter_text_data.write(response.text)
+
+"""The csv file is now loaded into a pandas dataframe for the next step of data processing and visulization."""
+
+tweet_text_data = pandas.read_csv("twitter_text_data.csv", sep=',')
+
+"""## Exploratory Data Analysis (EDA)
+
+Using the dataframe to obtain insights and patterns
+"""
+
+tweet_text_data
+
+"""The counts for each of the three classes are displayed to look for skewness in the dataset"""
+
+print(tweet_text_data.head())
+print(tweet_text_data['class'].value_counts())
+
+"""## Data Preprocessing
+Using the patterns identified in EDA, the dataset is transformed into a ML model readable format.
+
+The text of the tweet is converted to lowercase and further processed by removing unnecessary charactors, urls, etc.
+"""
+
+tweet_text_data['tweets'] = tweet_text_data['tweet'].str.lower()
+tweet_text_data['tweets'] = tweet_text_data['tweets'].apply(lambda x: x.replace('rt', ''))
+tweet_text_data['tweets'] = tweet_text_data['tweets'].apply(lambda x: re.sub(r'http\S+', '', x))
+tweet_text_data['tweets'] = tweet_text_data['tweets'].apply(lambda x: re.sub(r'[^a-zA-Z\s]', '', x))
+
+"""The text is tokenized"""
+
+tweet_text_data['tweets'] = tweet_text_data['tweets'].apply(lambda x: word_tokenize(x))
+
+"""Stopwords are removed from the tokenized text and each token is stemmed to its root word."""
+
+stop_words = set(stopwords.words('english'))
+tweet_text_data['tweets'] = tweet_text_data['tweets'].apply(lambda x: [word for word in x if word not in stop_words])
+stemmer = nltk.SnowballStemmer(language='english')
+tweet_text_data['tweets'] = tweet_text_data['tweets'].apply(lambda x: [stemmer.stem(word) for word in x])
+
+tweet_text_data['tweets'] = tweet_text_data['tweets'].apply(lambda x: ' '.join(x))
+
+tweet_text_data['tweets_deep_learning_txt'] = tweet_text_data['tweets'].apply(lambda x: x.split())
+
+"""## Feature Engineering
+The cleaned dataset can now be converted into the appropriate vector matrices for acting as model input.
+
+We are using the Tf-Idf vectorizer for creating input for the bag-of-words models which are SVM, Random Foreat, Multinomial Naive Bayes and Logistic Regression.
+"""
+
+tfidf = TfidfVectorizer()
+hate_speech_txt_data = tfidf.fit_transform(tweet_text_data['tweets'])
+hate_speech_labels = tweet_text_data['class']
+
+"""For the deep learning model we have used the word embeddings method to generate an input vector"""
+
+deep_lrng_tknzr = Tokenizer(num_words=5000)
+deep_lrng_tknzr.fit_on_texts(tweet_text_data['tweets_deep_learning_txt'])
+tweet_txt_vector = deep_lrng_tknzr.texts_to_sequences(tweet_text_data['tweets_deep_learning_txt'])
+tweets = pad_sequences(tweet_txt_vector, maxlen=200)
+print(tweets)
+
+len(tweets)
+
+dp_lrng_labels = numpy.array(tweet_text_data['class'])
+temp = []
+for i in range(len(labels)):
+    if dp_lrng_labels[i] == 2:
+        temp.append(2)
+    if dp_lrng_labels[i] == 1:
+        temp.append(1)
+    if dp_lrng_labels[i] == 0:
+        temp.append(0)
+temp = numpy.array(temp)
+dp_lrng_labels = tf.keras.utils.to_categorical(temp, 3, dtype="float32")
+del temp
+
+"""### Splitting the dataset into training set and testing set
+The split is performed in a 80-20 ratio.
+"""
+
+X_train_lr, X_test_lr, y_train_lr, y_test_lr = train_test_split(hate_speech_txt_data, hate_speech_labels, test_size=0.2, random_state=42)
+X_train_rf, X_test_rf, y_train_rf, y_test_rf = train_test_split(hate_speech_txt_data, hate_speech_labels, test_size=0.2, random_state=42)
+X_train_nb, X_test_nb, y_train_nb, y_test_nb = train_test_split(hate_speech_txt_data, hate_speech_labels, test_size=0.2, random_state=42)
+X_train_svm, X_test_svm, y_train_svm, y_test_svm = train_test_split(hate_speech_txt_data, hate_speech_labels, test_size=0.2, random_state=42)
+
+"""Splitting the word embeddings into training set and test set"""
+
+X_train, X_test, y_train, y_test = train_test_split(tweets,dp_lrng_labels, random_state=0)
+
+"""## Model Training and Evaluation
+
+### Bag-of-Words Model Initialization and Training
+
+#### Logistic Regression
+"""
+
+lgstc_rgr_mdl = LogisticRegression(verbose=1, solver='liblinear', random_state=0, C=5, penalty='l2', max_iter=100)
+lgstc_rgr_mdl.fit(X_train_lr, y_train_lr)
+
+"""#### Random Forest"""
+
+rndm_frst_mdl = RandomForestClassifier(n_estimators=100, random_state=0)
+rndm_frst_mdl.fit(X_train_rf, y_train_rf)
+
+"""#### Multinomial Naive Bayes"""
+
+nv_base_mdl = MultinomialNB(alpha=1.0)
+nv_base_mdl.fit(X_train_nb, y_train_nb)
+
+"""#### Support Vector Machine"""
+
+svm_mdl = SVC(kernel='linear', C=1, random_state=0)
+svm_mdl.fit(X_train_svm, y_train_svm)
+
+"""### Bag-of-Words Model Evaluation and Visualization
+
+The classifications from the above models are obtained
+"""
+
+lgstc_rgr_mdl_output = lgstc_rgr_mdl.predict(X_test_lr)
+rndm_frst_mdl_output = rndm_frst_mdl.predict(X_test_rf)
+nv_base_mdl_output = nv_base_mdl.predict(X_test_nb)
+svm_mdl_output = svm_mdl.predict(X_test_svm)
+
+"""Printing the classification report for each model for better understanding"""
+
+print("Logistic Regression Classification Report:")
+print(classification_report(y_test_lr, lgstc_rgr_mdl_output, zero_division=1))
+print("Random Forest Classification Report:")
+print(classification_report(y_test_rf, rndm_frst_mdl_output, zero_division=1))
+print("Multinomial Naive Bayes Classification Report:")
+print(classification_report(y_test_nb, nv_base_mdl_output, zero_division=1))
+print("SVM Classification Report:")
+print(classification_report(y_test_svm, svm_mdl_output, zero_division=1))
+
+models = ['Logistic Regression', 'Random Forest', 'Multinomial Naive Bayes', 'SVM']
+accuracies = [accuracy_score(y_test_lr, lgstc_rgr_mdl_output), accuracy_score(y_test_rf, rndm_frst_mdl_output), accuracy_score(y_test_nb, nv_base_mdl_output), accuracy_score(y_test_svm, svm_mdl_output)]
+plt.figure(figsize=(10, 6))
+plt.barh(models, accuracies, color='skyblue')
+plt.xlabel('Model Accuracy')
+plt.ylabel('Models')
+plt.title('Bag-of-Words Model Accuracy Comparison')
+plt.xlim(0, 1)
+for index, value in enumerate(accuracies):
+    plt.text(value, index, f"{value:.3f}", ha='left', va='center')
+plt.show()
+
+bog_mdl_precisions = [precision_score(y_test_lr, lgstc_rgr_mdl_output, average='weighted', zero_division=1),
+             precision_score(y_test_rf, rndm_frst_mdl_output, average='weighted', zero_division=1),
+             precision_score(y_test_nb, nv_base_mdl_output, average='weighted', zero_division=1),
+             precision_score(y_test_svm, svm_mdl_output, average='weighted', zero_division=1)]
+bog_mdl_recalls = [recall_score(y_test_lr, lgstc_rgr_mdl_output, average='weighted', zero_division=1),
+          recall_score(y_test_rf, rndm_frst_mdl_output, average='weighted', zero_division=1),
+          recall_score(y_test_nb, nv_base_mdl_output, average='weighted', zero_division=1),
+          recall_score(y_test_svm, svm_mdl_output, average='weighted', zero_division=1)]
+bog_mdl_f1scores = [f1_score(y_test_lr, lgstc_rgr_mdl_output, average='weighted', zero_division=1),
+      f1_score(y_test_rf, rndm_frst_mdl_output, average='weighted', zero_division=1),
+      f1_score(y_test_nb, nv_base_mdl_output, average='weighted', zero_division=1),
+      f1_score(y_test_svm, svm_mdl_output, average='weighted', zero_division=1)]
+data = {'Model': models, 'Accuracy': accuracies, 'Precision': bog_mdl_precisions, 'Recall': bog_mdl_recalls, 'F1-Score': bog_mdl_f1scores}
+bog_mdl_comparisons = pandas.DataFrame(data)
+print(bog_mdl_comparisons)
+
+"""### Deep Learning Model Initialization
+
+Creating a keras model and training it on the above generated word embeddings
+"""
+
+dp_lrng_mdl = Sequential()
+dp_lrng_mdl.add(layers.Embedding(5000, 40, input_length=200))
+dp_lrng_mdl.add(layers.Bidirectional(layers.LSTM(20,dropout=0.6)))
+dp_lrng_mdl.add(layers.Dense(3,activation='softmax'))
+dp_lrng_mdl.compile(optimizer='rmsprop',loss='categorical_crossentropy', metrics=['accuracy'])
+checkpoint2 = ModelCheckpoint("mdl.hdf5", monitor='val_accuracy', verbose=1,save_best_only=True, mode='auto', period=1,save_weights_only=False)
+history = dp_lrng_mdl.fit(X_train, y_train, epochs=12,validation_data=(X_test, y_test),callbacks=[checkpoint2])
+
+"""### Deep Learning Model Evaluation"""
+
+dp_lrng_mdl = load_model("mdl.hdf5")
+mdl_loss, mdl_accuracy = dp_lrng_mdl.evaluate(X_test, y_test)
+print(f"Deep Learning LSTM Model - Test Accuracy: {mdl_accuracy:.4f}, Test Loss: {mdl_loss:.4f}")
+accuracies.append(mdl_accuracy)
+
+"""### Final Model Evaluation and Visualization"""
+
+models.append('Bidirectional LSTM')
+loss, accuracy_bidirectional = dp_lrng_mdl.evaluate(X_test, y_test)
+accuracies.append(accuracy_bidirectional)
+plt.figure(figsize=(8, 6))
+plt.barh(models, accuracies, color='skyblue', edgecolor='black')
+plt.xlabel('Accuracy', fontsize=12)
+plt.ylabel('Models', fontsize=12)
+plt.title('Model Accuracy Comparison', fontsize=14, fontweight='bold')
+plt.xlim(0, 1)
+plt.gca().spines['top'].set_visible(False)
+plt.gca().spines['right'].set_visible(False)
+for i, v in enumerate(accuracies):
+    plt.text(v + 0.01, i, f'{v:.3f}', ha='left', va='center', fontsize=10, fontweight='bold')
+plt.tight_layout()
+plt.show()
+data = {'Model Used': models, 'Model Accuracy': accuracies}
+df_accuracy = pandas.DataFrame(data)
+print(df_accuracy)

@@ -1,0 +1,37 @@
+
+
+lecs in modules--
+mod 3
+ -->  Lec 3 -1
+	LEc 3 -2
+	Lec 3 -3
+	Lec 3 -4
+mod 4
+mod 5
+
+
+
+-- Project Proporsal => 26 points
+
+
+Exam 1 due on march 28
+Exam 2 due sometime in May 2023
+
+
+Lec on 2/17 NOtes--
+
+everything is stored in xml these days
+and are pretty much stored somewhere in the cloud
+
+
+
+RDM --> has XML syntax but also has semantics -
+why is this better than XMl--> coz we can understand the semantics of it.. it can kinda represent knowledge within the documents
+
+
+Merekel signature -is used to verify if the doc was tempered or not --> resulting doc after signature is called security enhanced doc  (SE-XML)
+
+
+Hash (hash(auth) +hash(auth.title)) --> and go on doing this in a tree fashion.. toh bich mein kuch change hua toh we will know
+hash value -> is calculated bottom up (from leave to the root of the tree) 
+
